@@ -344,7 +344,7 @@ function stars(){cv.width=innerWidth;cv.height=innerHeight;cx.clearRect(0,0,cv.w
     cx.fillStyle='rgba(180,200,255,'+(0.2+Math.random()*0.6)+')';cx.beginPath();cx.arc(x,y,r,0,7);cx.fill();}}
 stars();addEventListener('resize',stars);
 // ---------- password gate (клиентский, от случайных глаз) ----------
-const PASS="heroes";
+const PASS="heroes,./";
 (function(){
   const gate=document.getElementById('gate'),inp=document.getElementById('gatepass'),
     btn=document.getElementById('gatebtn'),err=document.getElementById('gateerr');
