@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Сокровищница · Испытание 0 · причинно-следственный граф</title>
+<style>
+  :root{
+    --bg:#070b16; --bg2:#0c1326; --panel:#0e1730cc; --line:#1c2945;
+    --ink:#e8eeff; --ink2:#9fb0d6; --gold:#f0c674; --pos:#19c37d; --neg:#ff5c7a;
+    --root:#19c37d; --leaf:#ff5cc8;
+    --cA:#4f7cff; --cB:#b06bff; --cC:#ffb14e; --cD:#19c37d; --cE:#3ad6e6; --cF:#ff5c7a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+  #stars{position:fixed;inset:0;z-index:0}
+  header{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;gap:16px;align-items:center;
+    padding:12px 18px;background:linear-gradient(180deg,#070b16ee,#070b1600);pointer-events:none}
+  header .pointer{pointer-events:auto}
+  .brand{display:flex;flex-direction:column;line-height:1.15}
+  .brand b{font-size:16px;letter-spacing:.3px}
+  .brand b .gem{color:var(--gold)}
+  .brand span{font-size:11px;color:var(--ink2)}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .chip{pointer-events:auto;cursor:pointer;border:1px solid var(--line);background:#0e1730aa;
+    color:var(--ink2);font-size:11px;padding:5px 9px;border-radius:20px;user-select:none;transition:.15s}
+  .chip:hover{color:var(--ink);border-color:#33508c}
+  .chip.active{color:#fff;border-color:transparent}
+  .chip[data-cl=A].active{background:var(--cA)} .chip[data-cl=B].active{background:var(--cB)}
+  .chip[data-cl=C].active{background:var(--cC);color:#221} .chip[data-cl=D].active{background:var(--cD);color:#022}
+  .chip[data-cl=E].active{background:var(--cE);color:#022} .chip[data-cl=F].active{background:var(--cF)}
+  .chip.spine.active{background:var(--gold);color:#221}
+  #search{pointer-events:auto;background:#0e1730;border:1px solid var(--line);color:var(--ink);
+    padding:6px 10px;border-radius:8px;font-size:12px;width:150px;outline:none}
+  #search:focus{border-color:#33508c}
+  #stage{position:fixed;inset:0;width:100vw;height:100vh;z-index:1;cursor:grab}
+  #stage.drag{cursor:grabbing}
+  .edge{stroke-width:1.5px;opacity:.5;fill:none}
+  .edge.pos{stroke:var(--pos)} .edge.neg{stroke:var(--neg);stroke-dasharray:2 3}
+  .edge.loop{stroke-dasharray:7 5;opacity:.72;animation:flow 1.1s linear infinite}
+  @keyframes flow{to{stroke-dashoffset:-18}}
+  .edge.lit{opacity:1;stroke-width:2.4px}
+  .edge.dim{opacity:.05}
+  .node{cursor:pointer}
+  .node circle{stroke:#0a0e1a;stroke-width:1.5px;transition:filter .15s}
+  .node.root circle{stroke:var(--root);stroke-width:2.5px}
+  .node.leaf circle{stroke:var(--leaf);stroke-width:2.5px}
+  .node text{fill:var(--ink2);font-size:10px;pointer-events:none;text-anchor:middle}
+  .node .id{fill:#fff;font-size:10px;font-weight:700}
+  /* темный ID на светлых кластерах (C/D/E) — контраст WCAG AA */
+  .node.cl-C text.id,.node.cl-D text.id,.node.cl-E text.id{fill:#06101f}
+  .node.lit circle{filter:drop-shadow(0 0 8px currentColor)}
+  .node.lit text{fill:var(--ink)}
+  .node.dim{opacity:.18}
+  .elabel{fill:var(--ink2);font-size:8px;text-anchor:middle;pointer-events:none}
+  /* detail panel */
+  #panel{position:fixed;top:0;right:0;bottom:0;width:380px;max-width:88vw;z-index:6;
+    background:var(--panel);backdrop-filter:blur(14px);border-left:1px solid var(--line);
+    transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);
+    display:flex;flex-direction:column;padding:0}
+  #panel.open{transform:none}
+  #panel .top{padding:18px 18px 12px;border-bottom:1px solid var(--line)}
+  #panel .badge{display:inline-block;font-size:10px;padding:3px 8px;border-radius:6px;
+    background:#1b2b4a;color:#fff;margin-bottom:8px}
+  #panel h2{margin:0 0 4px;font-size:18px;line-height:1.25}
+  #panel .meta{font-size:11px;color:var(--ink2)}
+  #panel .body{padding:16px 18px;overflow:auto}
+  #panel .quote{border-left:3px solid var(--gold);padding:8px 12px;margin:0 0 16px;
+    background:#0a1124;border-radius:0 8px 8px 0;font-size:13px;color:#dfe8ff;font-style:italic}
+  #panel .quote .tc{display:block;font-style:normal;color:var(--gold);font-size:11px;margin-top:6px}
+  .seg{margin:14px 0}
+  .seg h3{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink2);margin:0 0 8px}
+  .link{display:block;padding:7px 10px;margin:4px 0;border-radius:8px;background:#0c1326;
+    border:1px solid var(--line);font-size:12px;cursor:pointer;transition:.12s}
+  .link:hover{border-color:#33508c;background:#101a36}
+  .link .pol{font-weight:700;margin-right:6px}
+  .link .pol.pos{color:var(--pos)} .link .pol.neg{color:var(--neg)}
+  .link small{display:block;color:var(--ink2);margin-top:2px;font-size:11px}
+  #panel .close{position:absolute;top:14px;right:14px;cursor:pointer;color:var(--ink2);
+    font-size:20px;line-height:1;background:none;border:none}
+  #panel .close:hover{color:#fff}
+  /* legend + counters */
+  #legend{position:fixed;left:14px;bottom:14px;z-index:5;background:#0c1326cc;border:1px solid var(--line);
+    border-radius:10px;padding:10px 12px;font-size:11px;color:var(--ink2);max-width:240px}
+  #legend b{color:var(--ink)}
+  #legend .row{display:flex;align-items:center;gap:7px;margin:4px 0}
+  #legend .sw{width:14px;height:0;border-top:2px solid}
+  #legend .dot{width:10px;height:10px;border-radius:50%}
+  #hud{position:fixed;right:14px;bottom:14px;z-index:5;background:#0c1326cc;border:1px solid var(--line);
+    border-radius:10px;padding:8px 12px;font-size:11px;color:var(--ink2);text-align:right}
+  #hud b{color:var(--gold);font-size:14px}
+  .hint{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:4;color:#6b7aa0;font-size:11px}
+  #tip{position:fixed;z-index:9;pointer-events:none;background:#0a1124;border:1px solid var(--line);
+    padding:5px 9px;border-radius:7px;font-size:11px;color:var(--ink);max-width:260px;opacity:0;transition:.1s}
+  #gate{position:fixed;inset:0;z-index:20;background:radial-gradient(1200px 800px at 50% 30%,#0e1730,#05070f);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:24px}
+  #gate.hide{display:none}
+  #gate .gem{font-size:34px;color:var(--gold)}
+  #gate h1{margin:0;font-size:22px;letter-spacing:.3px}
+  #gate p{margin:0;color:var(--ink2);font-size:13px;max-width:360px}
+  #gate .row{display:flex;gap:8px;margin-top:6px}
+  #gate input{background:#0b1326;border:1px solid var(--line);color:var(--ink);font-size:15px;
+    padding:11px 14px;border-radius:10px;outline:none;width:220px}
+  #gate input:focus{border-color:#33508c}
+  #gate button{background:var(--gold);color:#221;border:none;font-weight:700;font-size:15px;
+    padding:11px 18px;border-radius:10px;cursor:pointer}
+  #gate .err{color:var(--neg);font-size:12px;min-height:14px}
+  #gate.shake input{animation:shk .35s}
+  @keyframes shk{0%,100%{transform:none}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+  #empty{position:fixed;left:50%;top:46%;transform:translate(-50%,-50%);z-index:4;display:none;
+    color:var(--ink2);font-size:13px;background:#0c1326e0;border:1px solid var(--line);padding:10px 16px;border-radius:10px}
+  @media(max-width:640px){
+    header{flex-wrap:wrap;gap:8px;background:#070b16f5}
+    #search{width:100%;order:3}
+    .chips{order:2}
+    .hint{display:none}
+    #legend{font-size:10px;max-width:170px;padding:8px}
+    #hud{font-size:10px;padding:6px 9px}
+    #panel{width:100vw}
+  }
+</style>
+</head>
+<body>
+<div id="gate">
+  <div class="gem">◆</div>
+  <h1>Сокровищница · Испытание 0</h1>
+  <p>Приватный причинно-следственный граф курса Product Heroes. Введите пароль для доступа.</p>
+  <div class="row"><input id="gatepass" type="password" placeholder="пароль" autofocus autocomplete="off"><button id="gatebtn">Войти</button></div>
+  <div class="err" id="gateerr"></div>
+</div>
+<canvas id="stars"></canvas>
+<header>
+  <div class="brand pointer">
+    <b><span class="gem">◆</span> Сокровищница · Испытание 0</b>
+    <span>причинно-следственный граф · AMPPU · AMPU · сходимость экономики</span>
+  </div>
+  <div class="chips pointer" id="chips"></div>
+  <input id="search" class="pointer" placeholder="поиск тезиса…" autocomplete="off">
+</header>
+<svg id="stage">
+  <defs>
+    <marker id="ar-pos" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L5,3 L0,6 z" fill="#19c37d"></path></marker>
+    <marker id="ar-neg" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L5,3 L0,6 z" fill="#ff5c7a"></path></marker>
+  </defs>
+  <g id="viewport"><g id="edges"></g><g id="elabels"></g><g id="nodes"></g></g></svg>
+<aside id="panel">
+  <button class="close" onclick="closePanel()">×</button>
+  <div class="top"><div class="badge" id="p-badge"></div><h2 id="p-title"></h2><div class="meta" id="p-meta"></div></div>
+  <div class="body">
+    <div class="quote" id="p-quote"></div>
+    <div class="seg"><h3>Предпосылки — что к этому ведет</h3><div id="p-in"></div></div>
+    <div class="seg"><h3>Последствия — к чему это ведет</h3><div id="p-out"></div></div>
+  </div>
+</aside>
+<div id="legend">
+  <b>Легенда</b>
+  <div class="row"><span class="sw" style="border-color:var(--pos)"></span> усиливает (+)</div>
+  <div class="row"><span class="sw" style="border-color:var(--neg)"></span> ослабляет (−)</div>
+  <div class="row"><span class="sw loop" style="border-color:var(--gold);border-style:dashed"></span> петля R / B</div>
+  <div class="row"><span class="dot" style="background:none;border:2px solid var(--root)"></span> корень (первопричина)</div>
+  <div class="row"><span class="dot" style="background:none;border:2px solid var(--leaf)"></span> лист (итог → сокровищница)</div>
+</div>
+<div id="hud"><b id="hud-n">0</b> тезисов · <b id="hud-e">0</b> связей</div>
+<div class="hint">тяни фон — двигать · колесо — масштаб · клик по узлу — детали · «магистраль» — подсветить путь</div>
+<div id="tip"></div>
+<div id="empty"></div>
+<script>
+const DATA = {"meta": {"title": "Причинно-следственный граф — Испытание 0 (AMPPU/AMPU/сходимость)", "source": "PHs26 Испытание 0, Илья Красинский, Product Heroes", "built_by": "Ариадна (ph-causal-architect) под оркестрацией Архимеда", "invariant": "внутренние узлы 3-4 связи; корни/лист допускают 2; хабы сверху не ограничены; нет изолированных и висячих; ребер >= 1.5x узлов; полярность +/-; петли R/B", "spine": ["T3", "T10", "T36", "T40", "T7", "T8", "T9", "T13", "T15", "T34", "T17", "T18", "T19", "T20", "T22", "T35"], "spine_prose": "Эпистемическая ветвь: T3/T10/T36/T40 (нельзя все учесть · ошибка атрибуции · слабость GPT · confirmation bias) → T7/T8/T9 (галлюцинации · как проще · черри-пикинг) → T13 (9/10 гипотез мимо) → T15 (зона мертвых усилий) → T34 (фальсификация) ↘ и параллельно юнит-экономическая ветвь: T17/T18 (ЮЭ-мост · скелет бизнеса) → T19 (AMPPU) → T20 (AMPU) → T22 (вывод о сходимости) ↘ обе ветви сходятся в лист T35 — причинно-следственный граф → сокровищница.", "clusters": {"A": "Постановка задач и неизбежность ошибки", "B": "Когнитивные искажения", "C": "Деньги, усилия, цена гипотез", "D": "Юнит-экономика: мост идея-деньги", "E": "Корректность расчета: когорты, факторный анализ, кросс-чеки", "F": "Метод обучения и роль расчета"}}, "nodes": [{"id": "T1", "label": "Размытый контекст — главное преступление с агентами", "cluster": "A", "kind": "node", "quote": "Размытый контекст… не давать контекст, результаты верить на 100%", "tc": "02:20", "cat": "ошибка/агенты"}, {"id": "T2", "label": "Даже идеальная задача дает ошибки", "cluster": "A", "kind": "node", "quote": "Даже если задача поставлена идеально правильным образом… все равно там будут ошибки", "tc": "04:36", "cat": "тезис"}, {"id": "T3", "label": "Учесть все заранее невозможно", "cluster": "A", "kind": "root", "quote": "Как можно учесть все? Ответ: конечно же, никак", "tc": "07:09", "cat": "тезис"}, {"id": "T4", "label": "Исходим: на выходе херня → фальсификация", "cluster": "A", "kind": "node", "quote": "Давайте с самого начала исходить, что на выходе мы получим херню… методом фальсификации", "tc": "07:36", "cat": "прием"}, {"id": "T5", "label": "Одна ошибка — и ты ошибся", "cluster": "A", "kind": "node", "quote": "В нашем бизнесе одна ошибка, и ты ошибся", "tc": "07:09", "cat": "тезис"}, {"id": "T36", "label": "Минусы GPT: нет ФС, harness, эволюции", "cluster": "A", "kind": "root", "quote": "У него нету доступа к файловой системе… нету харнес-обвязки… не эволюционирует", "tc": "03:11", "cat": "тезис"}, {"id": "T6", "label": "Одни и те же ошибки во всех странах", "cluster": "B", "kind": "root", "quote": "Одни и те же, что в Штатах, что в Лондоне… математика вся та же самая", "tc": "13:27", "cat": "тезис"}, {"id": "T7", "label": "Профессиональные галлюцинации", "cluster": "B", "kind": "node", "quote": "Команды в три раза недооценивают стоимость перехода и переоценивают выгоду продукта", "tc": "17:31", "cat": "искажение"}, {"id": "T8", "label": "Объяснительная модель: считают как проще", "cluster": "B", "kind": "node", "quote": "Считают не так, как правильно, а так, как проще", "tc": "47:32", "cat": "искажение"}, {"id": "T9", "label": "Черри-пикинг / ошибка выжившего", "cluster": "B", "kind": "node", "quote": "Из всей совокупности фактов выбирает только то, на что хочет смотреть", "tc": "47:32", "cat": "искажение"}, {"id": "T10", "label": "Фундаментальная ошибка атрибуции", "cluster": "B", "kind": "root", "quote": "Обстоятельства других мы не знаем и не учитываем… фундаментальная ошибка атрибуции", "tc": "47:02", "cat": "искажение"}, {"id": "T11", "label": "Карго-культ = точки роста", "cluster": "B", "kind": "root", "quote": "Почти все, что является карго-культом, — это ваши точки роста", "tc": "49:02", "cat": "тезис"}, {"id": "T38", "label": "Фаундер — источник убытков и галлюцинаций", "cluster": "B", "kind": "root", "quote": "Почему фонды инвестируют в травмы фаундеров… гарантирует, что не сдастся", "tc": "27:51", "cat": "тезис"}, {"id": "T12", "label": "max(value) / min(effort)", "cluster": "C", "kind": "node", "quote": "В числителе максимизировать value… в знаменателе минимизировать эффорт", "tc": "33:51", "cat": "фреймворк"}, {"id": "T13", "label": "9 из 10 гипотез не срабатывают", "cluster": "C", "kind": "node", "quote": "9 из 10 гипотез означает, что 90% задач на работе можно не делать", "tc": "34:16", "cat": "тезис"}, {"id": "T14", "label": "Гипотеза ~1 млн; успешная ~9-10 млн", "cluster": "C", "kind": "node", "quote": "Одна гипотеза стоит вокруг миллиона рублей. А девять из десяти не сработает", "tc": "39:22", "cat": "тезис"}, {"id": "T15", "label": "Зона мертвых усилий", "cluster": "C", "kind": "node", "quote": "Зона мертвых усилий… где усилий много, а результата математически не может быть", "tc": "37:12", "cat": "фреймворк"}, {"id": "T16", "label": "Решение с конца / от ИКР (ТРИЗ)", "cluster": "C", "kind": "node", "quote": "Из ТРИЗа берем прием идти от идеального конечного результата", "tc": "32:21", "cat": "прием"}, {"id": "T17", "label": "Юнит-экономика — мост идея→деньги", "cluster": "D", "kind": "node", "quote": "Минимальная матмодель, которая связывает любые идеи-гипотезы с деньгами", "tc": "43:10", "cat": "фреймворк"}, {"id": "T18", "label": "Скелет бизнеса: деньги←платежи←…←привлечение", "cluster": "D", "kind": "node", "quote": "От итогового результата описать минимальное количество шагов превращения людей в деньги", "tc": "01:22", "cat": "фреймворк"}, {"id": "T19", "label": "AMPPU = чек × маржа × покупки − издержки", "cluster": "D", "kind": "node", "quote": "Everich Margin Per Pain User — средняя маржа на привлеченного пользователя", "tc": "01:24", "cat": "формула"}, {"id": "T20", "label": "AMPU = AMPPU × C1 − CPA", "cluster": "D", "kind": "node", "quote": "Единственная формула, которую я вас прошу запомнить… доход на одного пользователя", "tc": "01:46", "cat": "формула"}, {"id": "T21", "label": "Бизнес-модель = формула AMPPU", "cluster": "D", "kind": "node", "quote": "Когда люди говорят «бизнес-модель», они буквально имеют формулу маржи… их семь штук", "tc": "01:25", "cat": "фреймворк"}, {"id": "T22", "label": "Вывод о сходимости экономики", "cluster": "D", "kind": "node", "quote": "Сходится ли тут платная экономика… она не сходится", "tc": "02:17", "cat": "вывод"}, {"id": "T23", "label": "Кассовый разрыв (3 уровня)", "cluster": "D", "kind": "node", "quote": "Кассовый разрыв смотрим по трем метрикам: МППУ, АМПУ, финансы", "tc": "02:49", "cat": "фреймворк"}, {"id": "T24", "label": "CAC — производная, прячет корни", "cluster": "D", "kind": "node", "quote": "Кастомер-эквизишн-кост не базовая метрика… не показывает корневые проблемы", "tc": "02:19", "cat": "метрика"}, {"id": "T25", "label": "Средняя температура по больнице", "cluster": "E", "kind": "node", "quote": "6% — это средняя температура по больнице", "tc": "53:00", "cat": "ошибка"}, {"id": "T26", "label": "Факторный анализ: независимые группы", "cluster": "E", "kind": "node", "quote": "Мы разбили людей на независимые группы пользователей… факторный анализ", "tc": "54:50", "cat": "прием"}, {"id": "T27", "label": "Когорты (3 типа)", "cluster": "E", "kind": "root", "quote": "Когорты — люди, разделенные по дате первого прихода… три типа", "tc": "55:42", "cat": "фреймворк"}, {"id": "T28", "label": "Псевдо-lifetime (7,6) vs честный (2,2)", "cluster": "E", "kind": "node", "quote": "Команда думает, что lifetime 7,6 мес, а он 2,2… зарабатывают в 3 раза меньше", "tc": "30:39", "cat": "ошибка"}, {"id": "T29", "label": "Важна не конверсия, а (1 − конверсия)", "cluster": "E", "kind": "node", "quote": "Нас должна интересовать не конверсия, а единица минус конверсия", "tc": "53:28", "cat": "прием"}, {"id": "T30", "label": "Кросс-чеки — страховка от ошибки", "cluster": "E", "kind": "node", "quote": "Кросс-чеки — это наша страховка от того, что мы где-то сделали ошибку", "tc": "02:50", "cat": "инструмент"}, {"id": "T31", "label": "Думать руками (автоматизмы)", "cluster": "F", "kind": "root", "quote": "Думайте руками. Подбирайте цифры руками… полосатое тело отвечает за автоматизмы", "tc": "01:26", "cat": "навык"}, {"id": "T32", "label": "Насмотренность: чужие цифры из комьюнити", "cluster": "F", "kind": "node", "quote": "Комьюнити генерирует больше хороших решений… никогда не берите NDA-цифры", "tc": "01:55", "cat": "навык"}, {"id": "T33", "label": "Считать для других, не для себя", "cluster": "F", "kind": "node", "quote": "Вы считаете юнит-экономику не для себя, вы ее считаете для других", "tc": "02:22", "cat": "тезис"}, {"id": "T34", "label": "Фальсификация — научный метод", "cluster": "F", "kind": "node", "quote": "Называется фальсификация… отриньте все альтернативные гипотезы", "tc": "02:54", "cat": "прием"}, {"id": "T35", "label": "Причинно-следственный граф → сокровищница", "cluster": "F", "kind": "leaf", "quote": "Вот здесь есть причинно-следственный граф… сделали сокровищницу на спейс-интерфейсе", "tc": "02:57", "cat": "output"}, {"id": "T37", "label": "Harness-обвязка для агентов", "cluster": "A", "kind": "node", "quote": "Куча компаний собирают харнес-обвязки, чтобы типовые задачи с агентами проверять", "tc": "01:01", "cat": "инструмент"}, {"id": "T39", "label": "Рынку продукт не нужен: 10 шагов потери конверсии, стоимость перехода ×3 недооценена", "cluster": "B", "kind": "root", "quote": "10 шагов потери конверсии между вами и пользователем… команды в три раза недооценивают стоимость перехода и переоценивают выгоду", "tc": "17:31", "cat": "тезис"}, {"id": "T40", "label": "Confirmation bias — подтверждать свою картину мира", "cluster": "B", "kind": "root", "quote": "Confermation byaz, склонность подтверждать свою модель мира… если вы спорите, вы получаете ноль полезной информации", "tc": "21:15", "cat": "искажение"}, {"id": "T41", "label": "70% A/B-тестов построены неверно; Evergreen A/B как лечение", "cluster": "E", "kind": "node", "quote": "70% аботестов, которые происходят в России, неправильно построены… Evergreen A/B test", "tc": "59:28", "cat": "ошибка"}], "edges": [{"from": "T3", "to": "T2", "polarity": "+", "loop": null, "label": "идеальная задача → ошибки"}, {"from": "T3", "to": "T4", "polarity": "+", "loop": null, "label": "→ исходим: получим херню"}, {"from": "T3", "to": "T1", "polarity": "+", "loop": null, "label": "→ контекст всегда неполон"}, {"from": "T36", "to": "T1", "polarity": "+", "loop": null, "label": "нет ФС/harness → размытый контекст"}, {"from": "T36", "to": "T37", "polarity": "+", "loop": null, "label": "→ собирают harness"}, {"from": "T10", "to": "T8", "polarity": "+", "loop": null, "label": "FAE → считают как проще"}, {"from": "T10", "to": "T9", "polarity": "+", "loop": null, "label": "FAE → черри-пикинг"}, {"from": "T10", "to": "T7", "polarity": "+", "loop": null, "label": "→ профгаллюцинации"}, {"from": "T38", "to": "T8", "polarity": "+", "loop": null, "label": "фаундер → объяснит. модели"}, {"from": "T38", "to": "T7", "polarity": "+", "loop": null, "label": "фаундер → переоценка выгоды"}, {"from": "T7", "to": "T9", "polarity": "+", "loop": "R", "label": "галлюцинации → черри-пикинг"}, {"from": "T9", "to": "T7", "polarity": "+", "loop": "R", "label": "черри-пикинг укрепляет галлюцинации"}, {"from": "T8", "to": "T9", "polarity": "+", "loop": null, "label": "как проще → подбор фактов"}, {"from": "T8", "to": "T25", "polarity": "+", "loop": null, "label": "как проще → средняя цифра"}, {"from": "T8", "to": "T28", "polarity": "+", "loop": null, "label": "как проще → 1/churn псевдо-lifetime"}, {"from": "T7", "to": "T2", "polarity": "+", "loop": null, "label": "галлюцинации → ошибки"}, {"from": "T2", "to": "T5", "polarity": "+", "loop": null, "label": "ошибки → одна и ты ошибся"}, {"from": "T1", "to": "T5", "polarity": "+", "loop": null, "label": "размытый контекст → ошибка"}, {"from": "T2", "to": "T4", "polarity": "+", "loop": null, "label": "ошибки неизбежны → исходим из херни"}, {"from": "T7", "to": "T13", "polarity": "+", "loop": null, "label": "галлюцинации → 9/10 мимо"}, {"from": "T8", "to": "T13", "polarity": "+", "loop": null, "label": "как проще → гипотезы мимо"}, {"from": "T11", "to": "T13", "polarity": "+", "loop": null, "label": "карго-культ → лишние задачи"}, {"from": "T9", "to": "T28", "polarity": "+", "loop": null, "label": "черри-пикинг → псевдо-lifetime принимают"}, {"from": "T13", "to": "T14", "polarity": "+", "loop": null, "label": "9/10 мимо → успешная ×10 дороже"}, {"from": "T28", "to": "T14", "polarity": "+", "loop": null, "label": "псевдо-lifetime → дорогие ошибки"}, {"from": "T14", "to": "T12", "polarity": "+", "loop": null, "label": "дорогие гипотезы → value/effort"}, {"from": "T17", "to": "T12", "polarity": "+", "loop": null, "label": "ЮЭ связывает с деньгами → уравнение"}, {"from": "T13", "to": "T15", "polarity": "+", "loop": null, "label": "90% можно не делать → зона мертвых усилий"}, {"from": "T16", "to": "T15", "polarity": "+", "loop": null, "label": "от ИКР → видно зону мертвых усилий"}, {"from": "T32", "to": "T15", "polarity": "+", "loop": null, "label": "насмотренность → раньше видишь зону"}, {"from": "T15", "to": "T34", "polarity": "+", "loop": null, "label": "нельзя доказать → можно опровергнуть"}, {"from": "T4", "to": "T34", "polarity": "+", "loop": null, "label": "метод фальсификации = научный метод"}, {"from": "T1", "to": "T34", "polarity": "+", "loop": null, "label": "контекст агента → фальсифицировать вывод"}, {"from": "T5", "to": "T34", "polarity": "+", "loop": null, "label": "цена ошибки → фальсификация"}, {"from": "T11", "to": "T34", "polarity": "+", "loop": null, "label": "карго-культ под сомнение"}, {"from": "T37", "to": "T34", "polarity": "+", "loop": null, "label": "harness → проверка задач агентов"}, {"from": "T7", "to": "T34", "polarity": "+", "loop": "B", "label": "галлюцинации → потребность фальсифицировать"}, {"from": "T34", "to": "T7", "polarity": "-", "loop": "B", "label": "фальсификация снижает галлюцинации"}, {"from": "T5", "to": "T30", "polarity": "+", "loop": null, "label": "цена ошибки → нужны кросс-чеки"}, {"from": "T30", "to": "T34", "polarity": "+", "loop": null, "label": "кросс-чек = инструмент фальсификации"}, {"from": "T12", "to": "T16", "polarity": "+", "loop": null, "label": "min effort → решать с конца"}, {"from": "T16", "to": "T18", "polarity": "+", "loop": null, "label": "с конца → скелет бизнеса"}, {"from": "T17", "to": "T18", "polarity": "+", "loop": null, "label": "ЮЭ → минимальная цепочка"}, {"from": "T6", "to": "T17", "polarity": "+", "loop": null, "label": "ошибки одни везде → универсальный мост"}, {"from": "T6", "to": "T32", "polarity": "+", "loop": null, "label": "ошибки одни везде → насмотренность переносима"}, {"from": "T18", "to": "T19", "polarity": "+", "loop": null, "label": "цепочка → AMPPU"}, {"from": "T27", "to": "T19", "polarity": "+", "loop": null, "label": "когорты → корректное число покупок"}, {"from": "T31", "to": "T19", "polarity": "+", "loop": null, "label": "думать руками → осваиваем формулы"}, {"from": "T32", "to": "T19", "polarity": "+", "loop": null, "label": "насмотренность → реальные цифры"}, {"from": "T19", "to": "T20", "polarity": "+", "loop": null, "label": "AMPPU → AMPU=AMPPU×C1−CPA"}, {"from": "T19", "to": "T21", "polarity": "+", "loop": null, "label": "AMPPU → бизнес-модель"}, {"from": "T19", "to": "T23", "polarity": "+", "loop": null, "label": "AMPPU<0 → разрыв на платящем"}, {"from": "T20", "to": "T22", "polarity": "+", "loop": null, "label": "AMPU>CPA → сходимость"}, {"from": "T20", "to": "T23", "polarity": "+", "loop": null, "label": "AMPU<0 → разрыв на маркетинге"}, {"from": "T20", "to": "T24", "polarity": "+", "loop": null, "label": "из C1,CPA → CAC=CPA/C1"}, {"from": "T21", "to": "T22", "polarity": "+", "loop": null, "label": "бизнес-модель → как считать сходимость"}, {"from": "T23", "to": "T22", "polarity": "-", "loop": null, "label": "кассовый разрыв → не сходится"}, {"from": "T24", "to": "T22", "polarity": "-", "loop": null, "label": "опора на CAC → неверные выводы"}, {"from": "T25", "to": "T22", "polarity": "-", "loop": null, "label": "средняя температура → ложный вывод"}, {"from": "T25", "to": "T26", "polarity": "+", "loop": null, "label": "проблема средней → факторный анализ"}, {"from": "T29", "to": "T26", "polarity": "+", "loop": null, "label": "1−конверсия → анализ причин по сегментам"}, {"from": "T27", "to": "T26", "polarity": "+", "loop": null, "label": "когорты → факторный анализ"}, {"from": "T26", "to": "T22", "polarity": "+", "loop": "R", "label": "факторный анализ → верный вывод"}, {"from": "T22", "to": "T26", "polarity": "+", "loop": "R", "label": "верный вывод укрепляет практику анализа"}, {"from": "T26", "to": "T28", "polarity": "-", "loop": null, "label": "факторный анализ → вскрывает честный lifetime"}, {"from": "T29", "to": "T22", "polarity": "+", "loop": null, "label": "работа с причинами отвала → реальная сходимость"}, {"from": "T30", "to": "T22", "polarity": "+", "loop": null, "label": "кросс-чеки → ловим ошибку → верный вывод"}, {"from": "T28", "to": "T22", "polarity": "-", "loop": null, "label": "псевдо-lifetime → ложная сходимость"}, {"from": "T13", "to": "T33", "polarity": "+", "loop": null, "label": "9/10 мимо → считать для других"}, {"from": "T34", "to": "T35", "polarity": "+", "loop": null, "label": "фальсификация → причинно-следственный граф"}, {"from": "T33", "to": "T35", "polarity": "+", "loop": null, "label": "считаем для других → артефакт в сокровищницу"}, {"from": "T22", "to": "T35", "polarity": "+", "loop": null, "label": "вывод о сходимости → в граф/сокровищницу"}, {"from": "T31", "to": "T30", "polarity": "+", "loop": null, "label": "руками доводим кросс-чеки до автоматизма"}, {"from": "T37", "to": "T1", "polarity": "-", "loop": null, "label": "harness снижает размытость контекста"}, {"from": "T18", "to": "T21", "polarity": "+", "loop": null, "label": "скелет → выбор бизнес-модели"}, {"from": "T8", "to": "T24", "polarity": "+", "loop": null, "label": "как проще → считают CAC"}, {"from": "T22", "to": "T33", "polarity": "+", "loop": null, "label": "вывод о сходимости → доносим другим"}, {"from": "T39", "to": "T7", "polarity": "+", "loop": null, "label": "недооценка перехода → переоценка выгоды (галлюцинации)"}, {"from": "T39", "to": "T13", "polarity": "+", "loop": null, "label": "рынку продукт не нужен → 9/10 гипотез мимо"}, {"from": "T39", "to": "T29", "polarity": "+", "loop": null, "label": "10 шагов потери → важна 1−конверсия"}, {"from": "T40", "to": "T8", "polarity": "+", "loop": null, "label": "confirmation bias → считают как проще"}, {"from": "T40", "to": "T9", "polarity": "+", "loop": null, "label": "confirmation bias → черри-пикинг"}, {"from": "T40", "to": "T7", "polarity": "+", "loop": null, "label": "confirmation bias → профгаллюцинации"}, {"from": "T34", "to": "T40", "polarity": "-", "loop": "B", "label": "фальсификация разрушает confirmation bias"}, {"from": "T8", "to": "T41", "polarity": "+", "loop": null, "label": "как проще → кривой A/B-тест"}, {"from": "T41", "to": "T28", "polarity": "+", "loop": null, "label": "кривой тест → псевдо-выводы/lifetime"}, {"from": "T41", "to": "T22", "polarity": "-", "loop": null, "label": "кривые A/B → ложный вывод о сходимости"}, {"from": "T41", "to": "T30", "polarity": "+", "loop": null, "label": "кривые тесты → нужны кросс-чеки (Evergreen A/B)"}, {"from": "T25", "to": "T29", "polarity": "+", "loop": null, "label": "средняя температура → смотреть 1−конверсию"}]};
+const CLUSTERS = DATA.meta.clusters;
+const CCOLOR = {A:'#4f7cff',B:'#b06bff',C:'#ffb14e',D:'#19c37d',E:'#3ad6e6',F:'#ff5c7a'};
+const nodes = DATA.nodes.map(n=>({...n}));
+const byId = Object.fromEntries(nodes.map(n=>[n.id,n]));
+const edges = DATA.edges.map(e=>({...e, s:byId[e.from], t:byId[e.to]}));
+// degree
+nodes.forEach(n=>n.deg=0);
+edges.forEach(e=>{e.s.deg++;e.t.deg++;});
+const spine = new Set(DATA.meta.spine || []);   // магистраль из данных, не хардкод
+function escH(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function wrapWords(text,max){const w=text.split(/\s+/);const lines=[];let cur='';
+  for(const word of w){ if(cur && (cur+' '+word).length>max){lines.push(cur);cur=word;} else cur=cur?cur+' '+word:word; if(lines.length===2)break; }
+  if(cur && lines.length<2)lines.push(cur);
+  const shown=lines.join(' ').length, full=text.replace(/\s+/g,' ').length;
+  if(shown<full)lines[lines.length-1]=lines[lines.length-1].replace(/[.,]?$/,'')+'…';
+  return lines.slice(0,2);}
+
+// ---------- force layout ----------
+const W=window.innerWidth,H=window.innerHeight;
+let i=0; nodes.forEach(n=>{const a=i++/nodes.length*Math.PI*2; n.x=W/2+Math.cos(a)*260+(n.id.charCodeAt(1)%7)*30; n.y=H/2+Math.sin(a)*220+(n.id.length)*7; n.vx=0;n.vy=0;});
+function layout(iters){
+  for(let k=0;k<iters;k++){
+    for(let a=0;a<nodes.length;a++)for(let b=a+1;b<nodes.length;b++){
+      const A=nodes[a],B=nodes[b];let dx=A.x-B.x,dy=A.y-B.y;let d2=dx*dx+dy*dy||0.01;let d=Math.sqrt(d2);
+      let f=14000/d2; let fx=dx/d*f, fy=dy/d*f; A.vx+=fx;A.vy+=fy;B.vx-=fx;B.vy-=fy;
+    }
+    edges.forEach(e=>{let dx=e.t.x-e.s.x,dy=e.t.y-e.s.y;let d=Math.sqrt(dx*dx+dy*dy)||0.01;
+      let f=(d-150)*0.045;let fx=dx/d*f,fy=dy/d*f; e.s.vx+=fx;e.s.vy+=fy;e.t.vx-=fx;e.t.vy-=fy;});
+    nodes.forEach(n=>{n.vx+=(W/2-n.x)*0.004;n.vy+=(H/2-n.y)*0.004;
+      if(n!==dragNode){n.x+=Math.max(-30,Math.min(30,n.vx))*0.5;n.y+=Math.max(-30,Math.min(30,n.vy))*0.5;}
+      n.vx*=0.82;n.vy*=0.82;});
+  }
+}
+let dragNode=null;
+layout(420);
+
+// ---------- render ----------
+const VP=document.getElementById('viewport'),gE=document.getElementById('edges'),
+  gL=document.getElementById('elabels'),gN=document.getElementById('nodes');
+const SVGNS='http://www.w3.org/2000/svg';
+function el(t,a){const e=document.createElementNS(SVGNS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+edges.forEach(e=>{
+  e.line=el('path',{class:'edge '+(e.polarity==='+'?'pos':'neg')+(e.loop?' loop':''),
+    'marker-end': e.polarity==='+'?'url(#ar-pos)':'url(#ar-neg)'});
+  gE.appendChild(e.line);
+});
+nodes.forEach(n=>{
+  const g=el('g',{class:'node '+n.kind+' cl-'+n.cluster});g.style.color=CCOLOR[n.cluster];
+  const r=8+Math.min(10,n.deg*1.1);
+  n.r=r;
+  g.appendChild(el('circle',{r,fill:CCOLOR[n.cluster]}));
+  const id=el('text',{class:'id',y:3});id.textContent=n.id;g.appendChild(id);
+  wrapWords(n.label,18).forEach((ln,i)=>{const t=el('text',{y:r+11+i*11});t.textContent=ln;g.appendChild(t);});
+  n.g=g; gN.appendChild(g);
+  g.addEventListener('click',ev=>{ev.stopPropagation();select(n.id);});
+  g.addEventListener('mousemove',ev=>showTip(ev,'<b>'+escH(n.id)+'</b> '+escH(n.label)));
+  g.addEventListener('mouseleave',hideTip);
+  g.addEventListener('mouseenter',()=>{if(!selected)lite(n.id);});
+  g.addEventListener('mouseleave',()=>{if(!selected)clearLite();});
+  // node drag
+  g.addEventListener('mousedown',ev=>{ev.stopPropagation();dragNode=n;});
+});
+function positions(){
+  edges.forEach(e=>{
+    const dx=e.t.x-e.s.x, dy=e.t.y-e.s.y, d=Math.hypot(dx,dy)||1, ux=dx/d, uy=dy/d;
+    const sx=e.s.x+ux*(e.s.r+1), sy=e.s.y+uy*(e.s.r+1);
+    const tx=e.t.x-ux*(e.t.r+5), ty=e.t.y-uy*(e.t.r+5);   // зазор под стрелку
+    e.line.setAttribute('d',`M${sx},${sy} L${tx},${ty}`);
+  });
+  nodes.forEach(n=>n.g.setAttribute('transform',`translate(${n.x},${n.y})`));
+}
+positions();
+document.getElementById('hud-n').textContent=nodes.length;
+document.getElementById('hud-e').textContent=edges.length;
+
+// ---------- pan / zoom ----------
+let view={x:0,y:0,s:1};
+function applyView(){VP.setAttribute('transform',`translate(${view.x},${view.y}) scale(${view.s})`);}
+const stage=document.getElementById('stage');
+let pan=null;
+stage.addEventListener('mousedown',ev=>{pan={x:ev.clientX-view.x,y:ev.clientY-view.y};stage.classList.add('drag');});
+window.addEventListener('mousemove',ev=>{
+  if(dragNode){const p=toWorld(ev.clientX,ev.clientY);dragNode.x=p.x;dragNode.y=p.y;layout(3);positions();return;}
+  if(pan){view.x=ev.clientX-pan.x;view.y=ev.clientY-pan.y;applyView();}
+});
+window.addEventListener('mouseup',()=>{pan=null;dragNode=null;stage.classList.remove('drag');});
+stage.addEventListener('wheel',ev=>{ev.preventDefault();const f=ev.deltaY<0?1.12:0.89;
+  const mx=ev.clientX,my=ev.clientY;view.x=mx-(mx-view.x)*f;view.y=my-(my-view.y)*f;view.s*=f;applyView();},{passive:false});
+function toWorld(cx,cy){return{x:(cx-view.x)/view.s,y:(cy-view.y)/view.s};}
+// center initial
+view.s=0.78;view.x=W*0.5-(W/2)*view.s;view.y=H*0.52-(H/2)*view.s;applyView();
+
+// ---------- highlight ----------
+let selected=null;
+function neighbors(id){const s=new Set([id]);edges.forEach(e=>{if(e.from===id)s.add(e.to);if(e.to===id)s.add(e.from);});return s;}
+function lite(id){
+  const nb=neighbors(id);
+  nodes.forEach(n=>{n.g.classList.toggle('lit',n.id===id);n.g.classList.toggle('dim',!nb.has(n.id));});
+  gL.innerHTML='';
+  edges.forEach(e=>{const on=e.from===id||e.to===id;
+    e.line.classList.toggle('lit',on);e.line.classList.toggle('dim',!on);
+    if(on){const tx=(e.s.x+e.t.x)/2,ty=(e.s.y+e.t.y)/2;
+      const t=el('text',{class:'elabel',x:tx,y:ty-2});t.textContent=e.polarity+(e.loop?' '+e.loop:'');gL.appendChild(t);}
+  });
+}
+function clearLite(){nodes.forEach(n=>n.g.classList.remove('lit','dim'));
+  edges.forEach(e=>e.line.classList.remove('lit','dim'));gL.innerHTML='';}
+
+// ---------- detail panel ----------
+const panel=document.getElementById('panel');
+function linkRow(e,dir){
+  const other=dir==='in'?e.s:e.t;
+  const d=document.createElement('div');d.className='link';
+  d.innerHTML=`<span class="pol ${e.polarity==='+'?'pos':'neg'}">${e.polarity}${e.loop?' '+e.loop:''}</span>`+
+    `<b>${escH(other.id)}</b> ${escH(other.label)}<small>${escH(e.label)}</small>`;
+  d.onclick=()=>select(other.id);return d;
+}
+function select(id){
+  const n=byId[id];selected=id;
+  document.getElementById('p-badge').textContent='Кластер '+n.cluster+' · '+CLUSTERS[n.cluster];
+  document.getElementById('p-badge').style.background=CCOLOR[n.cluster];
+  document.getElementById('p-title').textContent=n.id+' · '+n.label;
+  document.getElementById('p-meta').textContent=({root:'корень — первопричина',leaf:'лист — итоговый output',node:'узел'})[n.kind]+' · степень '+n.deg+(n.cat?' · '+n.cat:'');
+  const q=document.getElementById('p-quote');
+  q.innerHTML=(n.quote?('«'+escH(n.quote)+'»'):'')+(n.tc?`<span class="tc">⏱ ${escH(n.tc)}</span>`:'');
+  q.style.display=n.quote?'block':'none';
+  const pin=document.getElementById('p-in');pin.innerHTML='';
+  edges.filter(e=>e.to===id).forEach(e=>pin.appendChild(linkRow(e,'in')));
+  if(!pin.children.length)pin.innerHTML='<small style="color:var(--ink2)">нет — это корень</small>';
+  const pout=document.getElementById('p-out');pout.innerHTML='';
+  edges.filter(e=>e.from===id).forEach(e=>pout.appendChild(linkRow(e,'out')));
+  if(!pout.children.length)pout.innerHTML='<small style="color:var(--ink2)">нет — это лист</small>';
+  panel.classList.add('open');lite(id);
+}
+function closePanel(){panel.classList.remove('open');selected=null;clearLite();}
+stage.addEventListener('click',()=>{if(selected)closePanel();});
+
+// ---------- chips: clusters + spine ----------
+const chips=document.getElementById('chips');
+Object.keys(CLUSTERS).forEach(cl=>{
+  const c=document.createElement('div');c.className='chip';c.dataset.cl=cl;c.textContent=cl;
+  c.title=CLUSTERS[cl];c.onclick=()=>{c.classList.toggle('active');applyFilter();};chips.appendChild(c);
+});
+const spineChip=document.createElement('div');spineChip.className='chip spine';spineChip.textContent='магистраль';
+spineChip.onclick=()=>{spineChip.classList.toggle('active');applyFilter();};chips.appendChild(spineChip);
+function applyFilter(){
+  const active=[...chips.querySelectorAll('.chip[data-cl].active')].map(c=>c.dataset.cl);
+  const sp=spineChip.classList.contains('active');
+  nodes.forEach(n=>{
+    let show=true;
+    if(active.length)show=active.includes(n.cluster);
+    if(sp)show=show&&spine.has(n.id);
+    n.g.style.opacity=show?'':'0.08';n.g.style.pointerEvents=show?'':'none';
+  });
+}
+// ---------- search ----------
+const emptyBox=document.getElementById('empty');
+document.getElementById('search').addEventListener('input',ev=>{
+  const q=ev.target.value.toLowerCase().trim();let hits=0;
+  nodes.forEach(n=>{const hit=!q||n.label.toLowerCase().includes(q)||n.id.toLowerCase()===q||(n.quote||'').toLowerCase().includes(q);
+    if(hit)hits++; n.g.style.opacity=hit?'':'0.08';});
+  if(q && hits===0){emptyBox.textContent='Ничего не нашлось по запросу «'+ev.target.value+'»';emptyBox.style.display='block';}
+  else emptyBox.style.display='none';
+});
+// ---------- tooltip ----------
+const tip=document.getElementById('tip');
+function showTip(ev,html){tip.innerHTML=html;tip.style.opacity=1;tip.style.left=(ev.clientX+14)+'px';tip.style.top=(ev.clientY+14)+'px';}
+function hideTip(){tip.style.opacity=0;}
+// ---------- starfield ----------
+const cv=document.getElementById('stars'),cx=cv.getContext('2d');
+function stars(){cv.width=innerWidth;cv.height=innerHeight;cx.clearRect(0,0,cv.width,cv.height);
+  for(let i=0;i<160;i++){const x=Math.random()*cv.width,y=Math.random()*cv.height,r=Math.random()*1.3;
+    cx.fillStyle='rgba(180,200,255,'+(0.2+Math.random()*0.6)+')';cx.beginPath();cx.arc(x,y,r,0,7);cx.fill();}}
+stars();addEventListener('resize',stars);
+// ---------- password gate (клиентский, от случайных глаз) ----------
+const PASS="heroes";
+(function(){
+  const gate=document.getElementById('gate'),inp=document.getElementById('gatepass'),
+    btn=document.getElementById('gatebtn'),err=document.getElementById('gateerr');
+  if(sessionStorage.getItem('ph_ok')==='1'){gate.classList.add('hide');return;}
+  function tryOpen(){
+    if(inp.value===PASS){sessionStorage.setItem('ph_ok','1');gate.classList.add('hide');stars();}
+    else{err.textContent='Неверный пароль';gate.classList.add('shake');setTimeout(()=>gate.classList.remove('shake'),400);inp.select();}
+  }
+  btn.onclick=tryOpen;
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter')tryOpen();});
+  inp.focus();
+})();
+</script>
+</body>
+</html>
